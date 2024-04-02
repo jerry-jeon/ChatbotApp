@@ -77,7 +77,9 @@ class ClaudeApplication : Application() {
                 .withArguments(args)
                 .setHeaderRightButtonIconResId(R.drawable.baseline_record_voice_over_24)
                 .setOnHeaderRightButtonClickListener {
-                    it.context.startActivity(Intent(it.context, VoiceConversationActivity::class.java))
+                    val intent = Intent(it.context, VoiceConversationActivity::class.java)
+                    intent.putExtra("channelUrl", channelUrl)
+                    it.context.startActivity(intent)
                 }
                 .build()
         }

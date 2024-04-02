@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
@@ -25,8 +26,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import com.jerryjeon.claude.ui.theme.ClaudeAppTheme
+import com.sendbird.android.SendbirdChat
+import com.sendbird.android.channel.BaseChannel
+import com.sendbird.android.channel.GroupChannel
+import com.sendbird.android.collection.GroupChannelContext
+import com.sendbird.android.collection.MessageContext
+import com.sendbird.android.handler.GroupChannelHandler
+import com.sendbird.android.handler.MessageCollectionHandler
+import com.sendbird.android.ktx.extension.channel.getChannel
+import com.sendbird.android.message.BaseMessage
+import com.sendbird.android.params.MessageCollectionCreateParams
+import com.sendbird.android.params.MessageListParams
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 class VoiceConversationActivity : ComponentActivity() {
 
@@ -34,12 +49,13 @@ class VoiceConversationActivity : ComponentActivity() {
         override fun onReadyForSpeech(p0: Bundle?) {
             stateFlow.value = VoiceConversationState.Listening
         }
-        override fun onPartialResults(p0: Bundle?) { }
-        override fun onEvent(p0: Int, p1: Bundle?) { }
-        override fun onBeginningOfSpeech() { }
-        override fun onRmsChanged(p0: Float) { }
-        override fun onBufferReceived(p0: ByteArray?) { }
-        override fun onEndOfSpeech() { }
+
+        override fun onPartialResults(p0: Bundle?) {}
+        override fun onEvent(p0: Int, p1: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(p0: Float) {}
+        override fun onBufferReceived(p0: ByteArray?) {}
+        override fun onEndOfSpeech() {}
 
         override fun onError(error: Int) {
             stateFlow.value = VoiceConversationState.Error
@@ -67,6 +83,28 @@ class VoiceConversationActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val channelUrl = intent.getStringExtra("channelUrl") ?: throw IllegalArgumentException("channelUrl is required")
+        setUp(channelUrl)
+
+        // When the state is changed to Processing, send the spoken text to the bot
+        stateFlow
+            .onEach { println(it) }
+            .onEach { state ->
+                if (state is VoiceConversationState.Processing) {
+                    val spokenText = state.spokenText
+
+                    val channel = GroupChannel.getChannel(channelUrl)
+                    channel.sendUserMessage(spokenText) { message, error ->
+                        if (error != null) {
+                            stateFlow.value = VoiceConversationState.Error
+                        } else if (message != null) {
+                            stateFlow.value = VoiceConversationState.Sending(message.message)
+                        }
+                    }
+                }
+            }
+            .launchIn(lifecycleScope)
 
         setContent {
             ClaudeAppTheme {
@@ -112,6 +150,17 @@ class VoiceConversationActivity : ComponentActivity() {
         }
         speechRecognizer.startListening(intent)
     }
+
+    private fun setUp(channelUrl: String) {
+        SendbirdChat.addChannelHandler(channelUrl, object : GroupChannelHandler() {
+            override fun onMessageReceived(channel: BaseChannel, message: BaseMessage) {
+                if (channel.url != channelUrl) return
+                if (message.sender?.userId == SendbirdChat.currentUser?.userId) return
+
+                stateFlow.value = VoiceConversationState.Speaking(message.message)
+            }
+        })
+    }
 }
 
 @Composable
@@ -124,22 +173,36 @@ private fun VoiceConversationScreen(
             VoiceConversationState.NoPermission -> {
                 Text("Permission denied")
             }
+
             VoiceConversationState.Idle -> {
                 IdleState(startListening)
             }
+
             VoiceConversationState.Listening -> {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp))
             }
+
             is VoiceConversationState.Processing -> {
+                Column {
+                    Text("Processing...")
+                    Text(state.spokenText)
+                }
+            }
+
+            is VoiceConversationState.Sending -> {
+                Column {
+                    Text("Bot is typing...")
+                    Text(state.spokenText)
+                }
+            }
+
+            is VoiceConversationState.Speaking -> {
                 Text(state.spokenText)
             }
-            VoiceConversationState.Speaking -> {
-                CircularProgressIndicator(modifier = Modifier.size(48.dp))
-            }
+
             VoiceConversationState.Error -> {
                 Text("An error occurred")
             }
-
         }
     }
 }
@@ -154,14 +217,22 @@ private fun IdleState(
 }
 
 sealed class VoiceConversationState {
-    object NoPermission : VoiceConversationState()
-    object Idle : VoiceConversationState()
-    object Listening : VoiceConversationState()
-    class Processing(
+    data object NoPermission : VoiceConversationState()
+    data object Idle : VoiceConversationState()
+    data object Listening : VoiceConversationState()
+    data class Processing(
         val spokenText: String
     ) : VoiceConversationState()
-    object Speaking : VoiceConversationState()
-    object Error : VoiceConversationState()
+
+    data class Sending(
+        val spokenText: String
+    ) : VoiceConversationState()
+
+    data class Speaking(
+        val spokenText: String
+    ) : VoiceConversationState()
+
+    data object Error : VoiceConversationState()
 }
 
 @Composable
