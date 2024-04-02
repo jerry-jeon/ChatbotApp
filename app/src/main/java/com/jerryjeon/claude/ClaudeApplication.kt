@@ -1,12 +1,16 @@
 package com.jerryjeon.claude
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.MutableLiveData
 import com.sendbird.android.exception.SendbirdException
 import com.sendbird.android.handler.InitResultHandler
 import com.sendbird.uikit.SendbirdUIKit
 import com.sendbird.uikit.adapter.SendbirdUIKitAdapter
+import com.sendbird.uikit.fragments.ChannelFragment
 import com.sendbird.uikit.interfaces.UserInfo
+import com.sendbird.uikit.interfaces.providers.ChannelFragmentProvider
+import com.sendbird.uikit.providers.FragmentProviders
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class ClaudeApplication : Application() {
@@ -67,6 +71,16 @@ class ClaudeApplication : Application() {
                 }
             }
         }, this)
+
+        FragmentProviders.channel = ChannelFragmentProvider { channelUrl, args ->
+            ChannelFragment.Builder(channelUrl)
+                .withArguments(args)
+                .setHeaderRightButtonIconResId(R.drawable.baseline_record_voice_over_24)
+                .setOnHeaderRightButtonClickListener {
+                    it.context.startActivity(Intent(it.context, VoiceConversationActivity::class.java))
+                }
+                .build()
+        }
     }
 
 }
