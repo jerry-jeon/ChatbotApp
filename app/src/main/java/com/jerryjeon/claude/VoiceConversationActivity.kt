@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -31,19 +32,17 @@ import com.jerryjeon.claude.ui.theme.ClaudeAppTheme
 import com.sendbird.android.SendbirdChat
 import com.sendbird.android.channel.BaseChannel
 import com.sendbird.android.channel.GroupChannel
-import com.sendbird.android.collection.GroupChannelContext
-import com.sendbird.android.collection.MessageContext
 import com.sendbird.android.handler.GroupChannelHandler
-import com.sendbird.android.handler.MessageCollectionHandler
 import com.sendbird.android.ktx.extension.channel.getChannel
 import com.sendbird.android.message.BaseMessage
-import com.sendbird.android.params.MessageCollectionCreateParams
-import com.sendbird.android.params.MessageListParams
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import java.util.Locale
 
 class VoiceConversationActivity : ComponentActivity() {
+
+    lateinit var tts: TextToSpeech
 
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(p0: Bundle?) {
@@ -84,6 +83,12 @@ class VoiceConversationActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts.language = Locale.US
+            }
+        }
+
         val channelUrl = intent.getStringExtra("channelUrl") ?: throw IllegalArgumentException("channelUrl is required")
         setUp(channelUrl)
 
@@ -91,17 +96,23 @@ class VoiceConversationActivity : ComponentActivity() {
         stateFlow
             .onEach { println(it) }
             .onEach { state ->
-                if (state is VoiceConversationState.Processing) {
-                    val spokenText = state.spokenText
+                when (state) {
+                    is VoiceConversationState.Processing -> {
+                        val spokenText = state.spokenText
 
-                    val channel = GroupChannel.getChannel(channelUrl)
-                    channel.sendUserMessage(spokenText) { message, error ->
-                        if (error != null) {
-                            stateFlow.value = VoiceConversationState.Error
-                        } else if (message != null) {
-                            stateFlow.value = VoiceConversationState.Sending(message.message)
+                        val channel = GroupChannel.getChannel(channelUrl)
+                        channel.sendUserMessage(spokenText) { message, error ->
+                            if (error != null) {
+                                stateFlow.value = VoiceConversationState.Error
+                            } else if (message != null) {
+                                stateFlow.value = VoiceConversationState.Sending(message.message)
+                            }
                         }
                     }
+                    is VoiceConversationState.Speaking -> {
+                        tts.speak(state.spokenText, TextToSpeech.QUEUE_FLUSH, null, null)
+                    }
+                    else -> {}
                 }
             }
             .launchIn(lifecycleScope)
@@ -160,6 +171,13 @@ class VoiceConversationActivity : ComponentActivity() {
                 stateFlow.value = VoiceConversationState.Speaking(message.message)
             }
         })
+    }
+
+    override fun onDestroy() {
+        speechRecognizer.destroy()
+        tts.stop()
+        tts.shutdown()
+        super.onDestroy()
     }
 }
 
