@@ -6,6 +6,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -35,9 +36,11 @@ import com.sendbird.android.channel.GroupChannel
 import com.sendbird.android.handler.GroupChannelHandler
 import com.sendbird.android.ktx.extension.channel.getChannel
 import com.sendbird.android.message.BaseMessage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 class VoiceConversationActivity : ComponentActivity() {
@@ -86,6 +89,16 @@ class VoiceConversationActivity : ComponentActivity() {
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts.language = Locale.US
+                tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onDone(utteranceId: String?) {
+                        lifecycleScope.launch {
+                            delay(3000)
+                            startListening()
+                        }
+                    }
+                    override fun onError(utteranceId: String?) { }
+                    override fun onStart(utteranceId: String?) { }
+                })
             }
         }
 
@@ -110,7 +123,7 @@ class VoiceConversationActivity : ComponentActivity() {
                         }
                     }
                     is VoiceConversationState.Speaking -> {
-                        tts.speak(state.spokenText, TextToSpeech.QUEUE_FLUSH, null, null)
+                        tts.speak(state.spokenText, TextToSpeech.QUEUE_FLUSH, null, "id")
                     }
                     else -> {}
                 }
@@ -197,7 +210,11 @@ private fun VoiceConversationScreen(
             }
 
             VoiceConversationState.Listening -> {
-                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                Column {
+                    CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                    Text("Listening...")
+                }
+
             }
 
             is VoiceConversationState.Processing -> {
