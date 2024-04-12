@@ -8,15 +8,36 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animateValue
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,7 +47,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextAlign.Companion
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.jerryjeon.claude.ui.theme.ClaudeAppTheme
@@ -45,7 +70,7 @@ import java.util.Locale
 
 class VoiceConversationActivity : ComponentActivity() {
 
-    lateinit var tts: TextToSpeech
+    private lateinit var tts: TextToSpeech
 
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(p0: Bundle?) {
@@ -60,18 +85,28 @@ class VoiceConversationActivity : ComponentActivity() {
         override fun onEndOfSpeech() {}
 
         override fun onError(error: Int) {
-            stateFlow.value = VoiceConversationState.Error
+            val errorMessage = when (error) {
+                SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
+                SpeechRecognizer.ERROR_CLIENT -> "Client side error"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
+                SpeechRecognizer.ERROR_NETWORK -> "Network error"
+                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
+                SpeechRecognizer.ERROR_NO_MATCH -> "No match"
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "RecognitionService busy"
+                SpeechRecognizer.ERROR_SERVER -> "Error from server"
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
+                else -> "Unknown error"
+            }
+            stateFlow.value = VoiceConversationState.Error("Error: $errorMessage")
         }
 
         override fun onResults(results: Bundle?) {
-            val text = results
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.getOrNull(0)
+            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.getOrNull(0)
 
             if (text != null) {
                 stateFlow.value = VoiceConversationState.Processing(text)
             } else {
-                stateFlow.value = VoiceConversationState.Error
+                stateFlow.value = VoiceConversationState.Error("No text found")
             }
         }
 
@@ -92,12 +127,12 @@ class VoiceConversationActivity : ComponentActivity() {
                 tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onDone(utteranceId: String?) {
                         lifecycleScope.launch {
-                            delay(3000)
-                            startListening()
+                            stopSpeaking()
                         }
                     }
-                    override fun onError(utteranceId: String?) { }
-                    override fun onStart(utteranceId: String?) { }
+
+                    override fun onError(utteranceId: String?) {}
+                    override fun onStart(utteranceId: String?) {}
                 })
             }
         }
@@ -106,43 +141,45 @@ class VoiceConversationActivity : ComponentActivity() {
         setUp(channelUrl)
 
         // When the state is changed to Processing, send the spoken text to the bot
-        stateFlow
-            .onEach { println(it) }
-            .onEach { state ->
-                when (state) {
-                    is VoiceConversationState.Processing -> {
-                        val spokenText = state.spokenText
+        stateFlow.onEach { println(it) }.onEach { state ->
+            when (state) {
+                is VoiceConversationState.Processing -> {
+                    val spokenText = state.spokenText
 
-                        val channel = GroupChannel.getChannel(channelUrl)
-                        channel.sendUserMessage(spokenText) { message, error ->
-                            if (error != null) {
-                                stateFlow.value = VoiceConversationState.Error
-                            } else if (message != null) {
-                                stateFlow.value = VoiceConversationState.Sending(message.message)
-                            }
+                    val channel = GroupChannel.getChannel(channelUrl)
+                    channel.sendUserMessage(spokenText) { message, error ->
+                        if (error != null) {
+                            stateFlow.value = VoiceConversationState.Error(error.message ?: "Error")
+                        } else if (message != null) {
+                            stateFlow.value = VoiceConversationState.Sending(message.message)
                         }
                     }
-                    is VoiceConversationState.Speaking -> {
-                        tts.speak(state.spokenText, TextToSpeech.QUEUE_FLUSH, null, "id")
-                    }
-                    else -> {}
                 }
+
+                is VoiceConversationState.Speaking -> {
+                    if (state.continueProgress == 100) {
+                        startListening()
+                    } else if (state.isSpeaking) {
+                        tts.speak(state.spokenText, TextToSpeech.QUEUE_FLUSH, null, "id")
+                    } else {
+                        tts.stop()
+                    }
+                }
+
+                else -> {}
             }
-            .launchIn(lifecycleScope)
+        }.launchIn(lifecycleScope)
 
         setContent {
             ClaudeAppTheme {
                 // Creates an permission request
-                val recordAudioLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.RequestPermission(),
-                    onResult = { isGranted ->
-                        if (isGranted) {
-                            stateFlow.value = VoiceConversationState.Idle
-                        } else {
-                            stateFlow.value = VoiceConversationState.NoPermission
-                        }
+                val recordAudioLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission(), onResult = { isGranted ->
+                    if (isGranted) {
+                        stateFlow.value = VoiceConversationState.Idle
+                    } else {
+                        stateFlow.value = VoiceConversationState.NoPermission
                     }
-                )
+                })
 
                 LaunchedEffect(key1 = recordAudioLauncher) {
                     // Launches the permission request
@@ -159,12 +196,35 @@ class VoiceConversationActivity : ComponentActivity() {
 
                         VoiceConversationScreen(
                             state = state,
-                            startListening = this::startListening
+                            startListening = this::startListening,
+                            stopListening = speechRecognizer::stopListening,
+                            stopSpeaking = this::stopSpeaking
                         )
                     }
                 }
             }
         }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when (val state = stateFlow.value) {
+                    is VoiceConversationState.Listening -> {
+                        speechRecognizer.stopListening()
+                    }
+
+                    is VoiceConversationState.Speaking -> {
+                        if (state.isSpeaking) {
+                            stopSpeaking()
+                        } else {
+                            onBackPressedDispatcher.onBackPressed()
+                        }
+                    }
+
+                    else -> onBackPressedDispatcher.onBackPressed()
+                }
+
+            }
+        })
     }
 
     private fun startListening() {
@@ -181,9 +241,24 @@ class VoiceConversationActivity : ComponentActivity() {
                 if (channel.url != channelUrl) return
                 if (message.sender?.userId == SendbirdChat.currentUser?.userId) return
 
-                stateFlow.value = VoiceConversationState.Speaking(message.message)
+                stateFlow.value = VoiceConversationState.Speaking(message.message, isSpeaking = true)
             }
         })
+    }
+
+    private fun stopSpeaking() {
+        val state = stateFlow.value
+        if (state is VoiceConversationState.Speaking) {
+            lifecycleScope.launch {
+                for (progress in state.continueProgress..100 step 1) {
+                    stateFlow.value = state.copy(
+                        isSpeaking = false,
+                        continueProgress = progress
+                    )
+                    delay(30)
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -192,12 +267,15 @@ class VoiceConversationActivity : ComponentActivity() {
         tts.shutdown()
         super.onDestroy()
     }
+
 }
 
 @Composable
 private fun VoiceConversationScreen(
     state: VoiceConversationState,
-    startListening: () -> Unit
+    startListening: () -> Unit,
+    stopListening: () -> Unit,
+    stopSpeaking: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (state) {
@@ -206,37 +284,29 @@ private fun VoiceConversationScreen(
             }
 
             VoiceConversationState.Idle -> {
-                IdleState(startListening)
+                IdleState(message = null, startListening = startListening)
             }
 
             VoiceConversationState.Listening -> {
-                Column {
-                    CircularProgressIndicator(modifier = Modifier.size(48.dp))
-                    Text("Listening...")
-                }
-
+                ListeningScreen(stopListening = stopListening)
             }
 
             is VoiceConversationState.Processing -> {
-                Column {
-                    Text("Processing...")
-                    Text(state.spokenText)
-                }
+                ProcessingScreen(state)
             }
 
             is VoiceConversationState.Sending -> {
-                Column {
-                    Text("Bot is typing...")
-                    Text(state.spokenText)
-                }
+                SendingScreen(state)
             }
 
             is VoiceConversationState.Speaking -> {
-                Text(state.spokenText)
+                SpeakingView(state, stopSpeaking, startListening)
             }
 
-            VoiceConversationState.Error -> {
-                Text("An error occurred")
+            is VoiceConversationState.Error -> {
+                IdleState(
+                    message = state.errorMessage, startListening = startListening
+                )
             }
         }
     }
@@ -244,12 +314,153 @@ private fun VoiceConversationScreen(
 
 @Composable
 private fun IdleState(
-    startListening: () -> Unit
+    message: String? = null,
+    startListening: () -> Unit,
 ) {
-    Button(onClick = startListening) {
-        Text("Start Listening")
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier
+            .background(Color.LightGray, CircleShape)
+            .clickable { startListening() }
+            .size(150.dp)
+            .padding(16.dp)
+            .align(Alignment.Center),
+            contentAlignment = Alignment.Center) {
+            Text("Tap to speak")
+        }
+        if (message != null) {
+            Box(
+                modifier = Modifier
+                    .height(120.dp)
+                    .align(Alignment.BottomCenter)
+            ) {
+                Text(text = message)
+            }
+        }
     }
 }
+
+@Composable
+private fun ListeningScreen(
+    stopListening: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            BoomingAnimation()
+        }
+        Box(
+            modifier = Modifier
+                .height(120.dp)
+                .align(Alignment.BottomCenter)
+        ) {
+            Button(onClick = stopListening) {
+                Text("Stop Listening")
+            }
+        }
+    }
+}
+
+@Composable
+fun BoomingAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "InfiniteTransition")
+    val size by infiniteTransition.animateValue(
+        initialValue = 150.dp,
+        targetValue = 200.dp,
+        animationSpec = infiniteRepeatable(
+            animation = tween(350, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        typeConverter = Dp.VectorConverter,
+        label = ""
+    )
+
+    Box(
+        modifier = Modifier
+            .background(Color.LightGray, CircleShape)
+            .size(size)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text("Listening...")
+    }
+}
+
+@Composable
+private fun ProcessingScreen(state: VoiceConversationState.Processing) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        ProgressView(informationText = "Processing the response", spokenText = state.spokenText)
+    }
+}
+
+@Composable
+private fun SendingScreen(state: VoiceConversationState.Sending) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        ProgressView(informationText = "Waiting for the response", spokenText = state.spokenText)
+    }
+}
+
+@Composable
+private fun SpeakingView(state: VoiceConversationState.Speaking, stopSpeaking: () -> Unit, startListening: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (state.isSpeaking) {
+            ProgressView(modifier = Modifier.align(Alignment.Center), informationText = "Speaking", spokenText = state.spokenText)
+        } else {
+            Box(modifier = Modifier.align(Alignment.Center)) {
+                Text(
+                    text = state.spokenText, modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp), textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        // Add a button to stop speaking
+        Box(
+            modifier = Modifier
+                .height(120.dp)
+                .align(Alignment.BottomCenter)
+        ) {
+            if (state.isSpeaking) {
+                Button(onClick = stopSpeaking) {
+                    Text("Stop")
+                }
+            } else {
+                IconButton(onClick = startListening) {
+                    // Show progress around the icon
+                    Box(contentAlignment = Alignment.Center) {
+                        // Circular progress that continues around the icon
+                        CircularProgressIndicator(
+                            progress = state.continueProgress.toFloat() / 100f,
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        // The icon itself
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Start listening")
+                    }
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Start listening")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProgressView(modifier: Modifier = Modifier, informationText: String, spokenText: String) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(informationText)
+        Spacer(modifier = Modifier.height(16.dp))
+        // Center text
+        Text(
+            text = spokenText, modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp), textAlign = TextAlign.Center
+        )
+    }
+}
+
 
 sealed class VoiceConversationState {
     data object NoPermission : VoiceConversationState()
@@ -264,10 +475,12 @@ sealed class VoiceConversationState {
     ) : VoiceConversationState()
 
     data class Speaking(
-        val spokenText: String
+        val spokenText: String,
+        val isSpeaking: Boolean,
+        val continueProgress: Int = 0,
     ) : VoiceConversationState()
 
-    data object Error : VoiceConversationState()
+    data class Error(val errorMessage: String) : VoiceConversationState()
 }
 
 @Composable
@@ -276,9 +489,32 @@ fun RecognitionNotAvailable() {
     Text("Speech recognition is not available on this device")
 }
 
-@Preview
+@Preview(showBackground = true)
 @Composable
-fun PreviewVoiceConversationActivity() {
-    VoiceConversationActivity()
+private fun PreviewIdleState() {
+    IdleState(startListening = {})
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun PreviewSendingScreen() {
+    SendingScreen(VoiceConversationState.Sending("Hello"))
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewProcessingScreen() {
+    ProcessingScreen(VoiceConversationState.Processing("Hello"))
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewListeningScreen() {
+    ListeningScreen(stopListening = { })
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewSpeakingView() {
+    SpeakingView(VoiceConversationState.Speaking("Hello", isSpeaking = true), stopSpeaking = { }, startListening = { })
+}
