@@ -12,7 +12,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.VectorConverter
@@ -22,7 +21,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -49,10 +47,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextAlign.Companion
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.jerryjeon.claude.ui.theme.ClaudeAppTheme
 import com.sendbird.android.SendbirdChat
@@ -72,134 +70,32 @@ class VoiceConversationActivity : ComponentActivity() {
 
     private lateinit var tts: TextToSpeech
 
-    private val listener = object : RecognitionListener {
-        override fun onReadyForSpeech(p0: Bundle?) {
-            stateFlow.value = VoiceConversationState.Listening
-        }
-
-        override fun onPartialResults(p0: Bundle?) {}
-        override fun onEvent(p0: Int, p1: Bundle?) {}
-        override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(p0: Float) {}
-        override fun onBufferReceived(p0: ByteArray?) {}
-        override fun onEndOfSpeech() {}
-
-        override fun onError(error: Int) {
-            val errorMessage = when (error) {
-                SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
-                SpeechRecognizer.ERROR_CLIENT -> "Client side error"
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
-                SpeechRecognizer.ERROR_NETWORK -> "Network error"
-                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
-                SpeechRecognizer.ERROR_NO_MATCH -> "No match"
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "RecognitionService busy"
-                SpeechRecognizer.ERROR_SERVER -> "Error from server"
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
-                else -> "Unknown error"
-            }
-            stateFlow.value = VoiceConversationState.Error("Error: $errorMessage")
-        }
-
-        override fun onResults(results: Bundle?) {
-            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.getOrNull(0)
-
-            if (text != null) {
-                stateFlow.value = VoiceConversationState.Processing(text)
-            } else {
-                stateFlow.value = VoiceConversationState.Error("No text found")
-            }
-        }
-
-    }
-
-    private val speechRecognizer: SpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-        setRecognitionListener(listener)
-    }
-
-    val stateFlow: MutableStateFlow<VoiceConversationState> = MutableStateFlow(VoiceConversationState.NoPermission)
+    private lateinit var viewModel: VoiceConversationViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts.language = Locale.US
-                tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onDone(utteranceId: String?) {
-                        lifecycleScope.launch {
-                            stopSpeaking()
-                        }
-                    }
+        viewModel = ViewModelProvider(
+            this,
+            MyViewModelFactory(application, this, intent.extras ?: Bundle())
+        ).get(VoiceConversationViewModel::class.java)
 
-                    override fun onError(utteranceId: String?) {}
-                    override fun onStart(utteranceId: String?) {}
-                })
+        val recordAudioPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                viewModel.updatePermissionState(true)
+            } else {
+                viewModel.updatePermissionState(false)
             }
         }
 
-        val channelUrl = intent.getStringExtra("channelUrl") ?: throw IllegalArgumentException("channelUrl is required")
-        setUp(channelUrl)
-
-        // When the state is changed to Processing, send the spoken text to the bot
-        stateFlow.onEach { println(it) }.onEach { state ->
-            when (state) {
-                is VoiceConversationState.Processing -> {
-                    val spokenText = state.spokenText
-
-                    val channel = GroupChannel.getChannel(channelUrl)
-                    channel.sendUserMessage(spokenText) { message, error ->
-                        if (error != null) {
-                            stateFlow.value = VoiceConversationState.Error(error.message ?: "Error")
-                        } else if (message != null) {
-                            stateFlow.value = VoiceConversationState.Sending(message.message)
-                        }
-                    }
-                }
-
-                is VoiceConversationState.Speaking -> {
-                    if (state.continueProgress == 100) {
-                        startListening()
-                    } else if (state.isSpeaking) {
-                        tts.speak(state.spokenText, TextToSpeech.QUEUE_FLUSH, null, "id")
-                    } else {
-                        tts.stop()
-                    }
-                }
-
-                else -> {}
-            }
-        }.launchIn(lifecycleScope)
-
         setContent {
             ClaudeAppTheme {
-                // Creates an permission request
-                val recordAudioLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission(), onResult = { isGranted ->
-                    if (isGranted) {
-                        stateFlow.value = VoiceConversationState.Idle
-                    } else {
-                        stateFlow.value = VoiceConversationState.NoPermission
-                    }
-                })
-
-                LaunchedEffect(key1 = recordAudioLauncher) {
-                    // Launches the permission request
-                    recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                }
-
-
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (!SpeechRecognizer.isRecognitionAvailable(this@VoiceConversationActivity)) {
                         // Inform the user that speech recognition is not available
                         RecognitionNotAvailable()
                     } else {
-                        val state by stateFlow.collectAsState()
-
-                        VoiceConversationScreen(
-                            state = state,
-                            startListening = this::startListening,
-                            stopListening = speechRecognizer::stopListening,
-                            stopSpeaking = this::stopSpeaking
-                        )
+                        VoiceConversationScreen(viewModel)
                     }
                 }
             }
@@ -207,67 +103,35 @@ class VoiceConversationActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                when (val state = stateFlow.value) {
-                    is VoiceConversationState.Listening -> {
-                        speechRecognizer.stopListening()
-                    }
-
-                    is VoiceConversationState.Speaking -> {
-                        if (state.isSpeaking) {
-                            stopSpeaking()
-                        } else {
-                            onBackPressedDispatcher.onBackPressed()
-                        }
-                    }
-
-                    else -> onBackPressedDispatcher.onBackPressed()
-                }
-
-            }
-        })
-    }
-
-    private fun startListening() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1) // You can specify the number of results you want.
-        }
-        speechRecognizer.startListening(intent)
-    }
-
-    private fun setUp(channelUrl: String) {
-        SendbirdChat.addChannelHandler(channelUrl, object : GroupChannelHandler() {
-            override fun onMessageReceived(channel: BaseChannel, message: BaseMessage) {
-                if (channel.url != channelUrl) return
-                if (message.sender?.userId == SendbirdChat.currentUser?.userId) return
-
-                stateFlow.value = VoiceConversationState.Speaking(message.message, isSpeaking = true)
-            }
-        })
-    }
-
-    private fun stopSpeaking() {
-        val state = stateFlow.value
-        if (state is VoiceConversationState.Speaking) {
-            lifecycleScope.launch {
-                for (progress in state.continueProgress..100 step 1) {
-                    stateFlow.value = state.copy(
-                        isSpeaking = false,
-                        continueProgress = progress
-                    )
-                    delay(30)
+                if (!viewModel.handleBackPress()) {
+                    isEnabled = false   // Disable this callback
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true    // Re-enable this callback if the Activity isn't finished
                 }
             }
-        }
+        })
+
+        // Check and request the RECORD_AUDIO permission
+        recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+    }
+}
+
+@Composable
+private fun VoiceConversationScreen(
+    viewModel: VoiceConversationViewModel
+) {
+    val state by viewModel.stateFlow.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.startListening()
     }
 
-    override fun onDestroy() {
-        speechRecognizer.destroy()
-        tts.stop()
-        tts.shutdown()
-        super.onDestroy()
-    }
-
+    VoiceConversationScreen(
+        state = state,
+        startListening = viewModel::startListening,
+        stopListening = viewModel::stopListening,
+        stopSpeaking = viewModel::stopSpeaking
+    )
 }
 
 @Composable
@@ -461,27 +325,6 @@ private fun ProgressView(modifier: Modifier = Modifier, informationText: String,
     }
 }
 
-
-sealed class VoiceConversationState {
-    data object NoPermission : VoiceConversationState()
-    data object Idle : VoiceConversationState()
-    data object Listening : VoiceConversationState()
-    data class Processing(
-        val spokenText: String
-    ) : VoiceConversationState()
-
-    data class Sending(
-        val spokenText: String
-    ) : VoiceConversationState()
-
-    data class Speaking(
-        val spokenText: String,
-        val isSpeaking: Boolean,
-        val continueProgress: Int = 0,
-    ) : VoiceConversationState()
-
-    data class Error(val errorMessage: String) : VoiceConversationState()
-}
 
 @Composable
 fun RecognitionNotAvailable() {
