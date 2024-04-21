@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/background_50"
+    android:orientation="vertical">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/sb_size_56"
+        android:orientation="vertical"
+        android:paddingLeft="@dimen/sb_size_8"
+        android:paddingRight="@dimen/sb_size_8">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/sb_size_8"
+            android:layout_marginEnd="@dimen/sb_size_8"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Channels"
+            android:textAppearance="@style/SendbirdH2OnLight01"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/settingsButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"></TextView>
+
+        <ImageButton
+            android:id="@+id/settingsButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center"
+            android:layout_marginEnd="@dimen/sb_size_8"
+            android:contentDescription="SEttings"
+            android:padding="@dimen/sb_size_8"
+            android:scaleType="centerCrop"
+            app:tint="@color/primary_300"
+            android:background="@drawable/sb_button_uncontained_background_light"
+            android:src="@drawable/baseline_settings_24"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/addChannelButton"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <ImageButton
+            android:id="@+id/addChannelButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center"
+            android:layout_marginEnd="@dimen/sb_size_8"
+            android:contentDescription="Add channel"
+            android:padding="@dimen/sb_size_8"
+            android:scaleType="centerCrop"
+            android:src="@drawable/icon_create"
+            android:background="@drawable/sb_button_uncontained_background_light"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@color/primary_300"
+            />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <View
+        android:id="@+id/elevationView"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/sb_size_1"
+        android:background="@color/onlight_04" />
+
+</LinearLayout>

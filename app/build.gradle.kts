@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.androidx.datastore.core.android)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.material3.android)
+    implementation(libs.androidx.constraintlayout)
 
     // Hilt
     implementation(libs.hilt.android)
