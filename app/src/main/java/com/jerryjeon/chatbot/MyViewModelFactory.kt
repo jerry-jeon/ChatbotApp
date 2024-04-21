@@ -1,4 +1,4 @@
-package com.jerryjeon.claude
+package com.jerryjeon.chatbot
 
 import android.app.Application
 import android.os.Bundle

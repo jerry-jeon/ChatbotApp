@@ -1,4 +1,4 @@
-package com.jerryjeon.claude
+package com.jerryjeon.chatbot
 
 import android.app.Application
 import android.content.Intent
@@ -10,7 +10,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import com.sendbird.android.SendbirdChat
 import com.sendbird.android.channel.BaseChannel

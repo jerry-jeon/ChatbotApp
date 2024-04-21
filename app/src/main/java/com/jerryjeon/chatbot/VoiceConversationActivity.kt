@@ -1,4 +1,4 @@
-package com.jerryjeon.claude
+package com.jerryjeon.chatbot
 
 import android.os.Bundle
 import android.speech.SpeechRecognizer
@@ -46,7 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
-import com.jerryjeon.claude.ui.theme.ClaudeAppTheme
+import com.jerryjeon.chatbot.ui.theme.ChatbotAppTheme
 
 class VoiceConversationActivity : ComponentActivity() {
 
@@ -71,7 +71,7 @@ class VoiceConversationActivity : ComponentActivity() {
         }
 
         setContent {
-            ClaudeAppTheme {
+            ChatbotAppTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (!SpeechRecognizer.isRecognitionAvailable(this@VoiceConversationActivity)) {
                         // Inform the user that speech recognition is not available

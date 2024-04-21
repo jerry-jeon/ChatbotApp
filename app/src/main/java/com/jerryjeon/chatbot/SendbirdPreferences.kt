@@ -1,4 +1,4 @@
-package com.jerryjeon.claude
+package com.jerryjeon.chatbot
 
 import android.content.Context
 import androidx.datastore.core.DataStore

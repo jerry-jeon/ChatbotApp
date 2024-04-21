@@ -1,4 +1,4 @@
-package com.jerryjeon.claude
+package com.jerryjeon.chatbot
 
 import android.app.Application
 import android.content.Context
@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 @HiltAndroidApp
-class ClaudeApplication : Application() {
+class ChatbotApplication : Application() {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 

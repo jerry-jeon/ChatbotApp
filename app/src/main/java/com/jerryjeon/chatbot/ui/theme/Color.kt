@@ -1,4 +1,4 @@
-package com.jerryjeon.claude.ui.theme
+package com.jerryjeon.chatbot.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

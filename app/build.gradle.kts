@@ -12,11 +12,11 @@ val secretProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.jerryjeon.claude"
+    namespace = "com.jerryjeon.chatbot"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.jerryjeon.claude"
+        applicationId = "com.jerryjeon.chatbot"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

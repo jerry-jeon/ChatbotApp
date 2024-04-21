@@ -1,4 +1,4 @@
-package com.jerryjeon.claude
+package com.jerryjeon.chatbot
 
 sealed class VoiceConversationState {
     data object NoPermission : VoiceConversationState()

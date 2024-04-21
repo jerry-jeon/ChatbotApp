@@ -1,4 +1,4 @@
-package com.jerryjeon.claude
+package com.jerryjeon.chatbot
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import com.jerryjeon.claude.ui.theme.ClaudeAppTheme
+import com.jerryjeon.chatbot.ui.theme.ChatbotAppTheme
 import com.sendbird.uikit.activities.ChannelListActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         lifecycleScope.launch {
-            ClaudeApplication.initialized
+            ChatbotApplication.initialized
                 .collectLatest {
                     if (it == InitState.INITIALIZED) {
                         startActivity(ChannelListActivity.newIntent(this@MainActivity))
@@ -38,8 +38,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            ClaudeAppTheme {
-                val initState by ClaudeApplication.initialized.collectAsState()
+            ChatbotAppTheme {
+                val initState by ChatbotApplication.initialized.collectAsState()
                 // A surface container using the 'background' color from the theme
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     when (initState) {
