@@ -1,15 +1,10 @@
 package com.jerryjeon.claude
 
-import android.content.Intent
 import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
@@ -51,20 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
 import com.jerryjeon.claude.ui.theme.ClaudeAppTheme
-import com.sendbird.android.SendbirdChat
-import com.sendbird.android.channel.BaseChannel
-import com.sendbird.android.channel.GroupChannel
-import com.sendbird.android.handler.GroupChannelHandler
-import com.sendbird.android.ktx.extension.channel.getChannel
-import com.sendbird.android.message.BaseMessage
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
-import java.util.Locale
 
 class VoiceConversationActivity : ComponentActivity() {
 
@@ -266,24 +248,29 @@ private fun SendingScreen(state: VoiceConversationState.Sending) {
 
 @Composable
 private fun SpeakingView(state: VoiceConversationState.Speaking, stopSpeaking: () -> Unit, startListening: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 32.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         if (state.isSpeaking) {
-            ProgressView(modifier = Modifier.align(Alignment.Center), informationText = "Speaking", spokenText = state.spokenText)
-        } else {
-            Box(modifier = Modifier.align(Alignment.Center)) {
-                Text(
-                    text = state.spokenText, modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp), textAlign = TextAlign.Center
-                )
-            }
+            CircularProgressIndicator()
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Speaking")
         }
+        Text(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(16.dp),
+            textAlign = TextAlign.Center,
+            text = state.spokenText,
+        )
 
         // Add a button to stop speaking
         Box(
             modifier = Modifier
                 .height(120.dp)
-                .align(Alignment.BottomCenter)
         ) {
             if (state.isSpeaking) {
                 Button(onClick = stopSpeaking) {
