@@ -18,6 +18,7 @@ import com.sendbird.android.channel.GroupChannel
 import com.sendbird.android.handler.GroupChannelHandler
 import com.sendbird.android.ktx.extension.channel.getChannel
 import com.sendbird.android.message.BaseMessage
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,10 +31,13 @@ class VoiceConversationViewModel(
     application: Application,
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
+
+    private var startListeningJob: Job? = null
+
     private val channelUrl: String = savedStateHandle.get<String>("channelUrl")
         ?: throw IllegalArgumentException("Channel URL is required")
 
-    val function: (status: Int) -> Unit = { status ->
+    private val function: (status: Int) -> Unit = { status ->
         if (status == TextToSpeech.SUCCESS) {
             tts.language = Locale.US
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -128,6 +132,7 @@ class VoiceConversationViewModel(
     }
 
     fun startListening() {
+        startListeningJob?.cancel()
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
@@ -142,7 +147,7 @@ class VoiceConversationViewModel(
     fun stopSpeaking() {
         val state = stateFlow.value
         if (state is VoiceConversationState.Speaking) {
-            viewModelScope.launch {
+            startListeningJob = viewModelScope.launch {
                 for (progress in state.continueProgress..100 step 1) {
                     _stateFlow.value = state.copy(
                         isSpeaking = false,
@@ -194,8 +199,8 @@ class VoiceConversationViewModel(
     override fun onCleared() {
         super.onCleared()
         speechRecognizer.destroy()
-        tts?.stop()
-        tts?.shutdown()
+        tts.stop()
+        tts.shutdown()
         SendbirdChat.removeChannelHandler(channelUrl)
     }
 }
