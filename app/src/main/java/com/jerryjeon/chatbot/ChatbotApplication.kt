@@ -9,6 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import com.jerryjeon.chatbot.voice.VoiceConversationActivity
 import com.sendbird.android.exception.SendbirdException
 import com.sendbird.android.handler.InitResultHandler
 import com.sendbird.uikit.SendbirdUIKit

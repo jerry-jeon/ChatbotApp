@@ -1,4 +1,4 @@
-package com.jerryjeon.chatbot
+package com.jerryjeon.chatbot.voice
 
 import android.os.Bundle
 import android.speech.SpeechRecognizer
@@ -46,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import com.jerryjeon.chatbot.MyViewModelFactory
 import com.jerryjeon.chatbot.ui.theme.ChatbotAppTheme
 
 class VoiceConversationActivity : ComponentActivity() {

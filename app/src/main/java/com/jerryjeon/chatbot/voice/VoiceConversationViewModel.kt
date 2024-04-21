@@ -1,4 +1,4 @@
-package com.jerryjeon.chatbot
+package com.jerryjeon.chatbot.voice
 
 import android.app.Application
 import android.content.Intent

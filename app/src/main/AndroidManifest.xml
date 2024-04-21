@@ -28,7 +28,7 @@
         </activity>
 
         <activity
-            android:name=".VoiceConversationActivity"
+            android:name=".voice.VoiceConversationActivity"
             android:exported="true" />
 
         <activity
