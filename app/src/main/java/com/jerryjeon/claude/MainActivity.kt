@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
                 .collectLatest {
                     if (it) {
                         startActivity(ChannelListActivity.newIntent(this@MainActivity))
+                        finish()
                     }
                 }
         }
