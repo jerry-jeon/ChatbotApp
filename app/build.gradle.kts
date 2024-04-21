@@ -3,6 +3,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
+    alias(libs.plugins.hiltAndroid)
+    kotlin("kapt")
 }
 
 val secretProperties = Properties().apply {
@@ -32,8 +34,8 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         all {
-            buildConfigField("String", "APP_ID", secretProperties.getProperty("appId"))
-            buildConfigField("String", "USER_ID", secretProperties.getProperty("userId"))
+            buildConfigField("String", "SENDBIRD_APP_ID", secretProperties.getProperty("sendbirdAppId", "\"\""))
+            buildConfigField("String", "SENDBIRD_USER_ID", secretProperties.getProperty("sendbirdUserId", "\"\""))
         }
     }
     compileOptions {
@@ -70,6 +72,15 @@ dependencies {
     implementation(libs.uikit)
     implementation(libs.androidx.recyclerview)
     implementation(libs.sendbird.chat.ktx)
+    implementation(libs.androidx.datastore.core.android)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.material3.android)
+
+    // Hilt
+    implementation(libs.hilt.android)
+    implementation(libs.androidx.hilt.navigation.compose)
+    kapt(libs.hilt.compiler)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
